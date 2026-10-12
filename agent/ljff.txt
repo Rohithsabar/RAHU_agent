@@ -1,0 +1,2 @@
+for item in sequence:
+    # Code block to run for each item

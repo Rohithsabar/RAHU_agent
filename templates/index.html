@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#102a43">
+  <title>RAHU Assistant</title>
+  <link rel="icon" href="{{ url_for('static', filename='rahu.svg') }}" type="image/svg+xml">
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+  {% if not paired %}
+  <main class="pair-page">
+    <section class="pair-panel">
+      <img src="{{ url_for('static', filename='rahu.svg') }}" alt="RAHU logo">
+      <p class="eyebrow">SAME WI-FI PAIRING</p>
+      <h1>Connect this phone</h1>
+      <p>Enter the temporary pairing code shown in RAHU on your computer.</p>
+      <form id="pairForm">
+        <label for="pairCode">8-digit pairing code</label>
+        <input id="pairCode" inputmode="numeric" autocomplete="one-time-code" maxlength="8" required>
+        <button type="submit">Pair phone</button>
+        <p id="pairError" role="alert"></p>
+      </form>
+    </section>
+  </main>
+  <script>
+    document.getElementById('pairForm').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const error = document.getElementById('pairError');
+      try {
+        const response = await fetch('/api/pair', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code: document.getElementById('pairCode').value.trim() })
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || 'Pairing failed.');
+        location.reload();
+      } catch (exception) {
+        error.textContent = exception.message;
+      }
+    });
+  </script>
+  {% else %}
+  <div class="shell">
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="RAHU Assistant home">
+        <img src="{{ url_for('static', filename='rahu.svg') }}" alt="">
+        <span><strong>RAHU</strong><small>DESKTOP ASSISTANT</small></span>
+      </a>
+      <div class="top-status" aria-live="polite">
+        <span class="status-light" id="serviceLight"></span>
+        <span id="serviceStatus">Checking assistant</span>
+      </div>
+      <button class="icon-button" id="refreshStatus" type="button" title="Refresh assistant status" aria-label="Refresh assistant status">↻</button>
+    </header>
+
+    <main class="workspace">
+      <section class="conversation" aria-label="Assistant conversation">
+        <div class="conversation-heading">
+          <div>
+            <p class="eyebrow">YOUR LOCAL WORKSPACE</p>
+            <h1>What would you like done?</h1>
+          </div>
+          <span class="mode-label" id="modeLabel">LOCAL TOOLS</span>
+        </div>
+
+        <div class="welcome" id="welcome">
+          <img src="{{ url_for('static', filename='rahu.svg') }}" alt="RAHU logo">
+          <div>
+            <h2>Ready when you are.</h2>
+            <p>Ask naturally. I can use your local tools, or an AI model when one is configured.</p>
+          </div>
+        </div>
+
+        <div class="messages" id="messages" aria-live="polite" aria-label="Conversation"></div>
+
+        <div class="suggestions" aria-label="Example requests">
+          <button type="button" data-prompt="Open Microsoft Store">Open an app</button>
+          <button type="button" data-prompt="Find my budget file">Find a file</button>
+          <button type="button" data-prompt="Create a 10-slide presentation about hospital management">Create a presentation</button>
+          <button type="button" data-prompt="Help me plan my workday">Plan my workday</button>
+        </div>
+
+        <form id="commandForm" class="composer">
+          <label class="sr-only" for="commandInput">Your request</label>
+          <textarea id="commandInput" rows="2" maxlength="4000" placeholder="Describe what you want RAHU to do..." required></textarea>
+          <div class="composer-footer">
+            <p>Destructive actions ask before they run.</p>
+            <button id="sendButton" type="submit"><span>Send request</span><b aria-hidden="true">↗</b></button>
+          </div>
+        </form>
+      </section>
+
+      <aside class="rail" aria-label="Assistant status and tools">
+        {% if mobile_enabled and is_local %}
+        <section class="mobile-pair-card">
+          <strong>Connect a phone on this Wi-Fi</strong>
+          <p>Open one of these addresses on your phone:</p>
+          {% for address in mobile_addresses %}
+          <code>http://{{ address }}:{{ mobile_port }}/</code>
+          {% else %}
+          <small>No private network address found yet.</small>
+          {% endfor %}
+          <p>Temporary pairing code</p>
+          <output>{{ mobile_pairing_code }}</output>
+          <small>Only share on a trusted home network. Never port-forward this app to the internet.</small>
+        </section>
+        {% endif %}
+        <section class="rail-section">
+          <div class="section-title"><h2>AI connection</h2><span id="aiBadge">LOCAL</span></div>
+          <div class="provider-row"><span class="provider-dot online-dot"></span><div><strong>Online model</strong><small id="onlineModel">Not configured</small></div><span class="provider-state" id="onlineState">OFF</span></div>
+          <div class="provider-row"><span class="provider-dot local-dot"></span><div><strong>Local model</strong><small id="localModel">Ollama · qwen2.5:7b</small></div><span class="provider-state" id="localState">CHECKING</span></div>
+          <details class="ai-setup">
+            <summary>Connect an AI model</summary>
+            <div class="ai-form">
+              <a class="provider-link" href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer">Get a Gemini API key</a>
+              <button class="preset-button" type="button" id="geminiPreset">Use Gemini free tier</button>
+              <label for="onlineUrl">Online API URL</label>
+              <input id="onlineUrl" type="url" value="https://generativelanguage.googleapis.com/v1beta/openai" autocomplete="url">
+              <label for="onlineModelInput">Online model</label>
+              <input id="onlineModelInput" type="text" value="gemini-3.8-flash" autocomplete="off">
+              <label for="onlineApiKey">Online API key</label>
+              <input id="onlineApiKey" type="password" placeholder="Saved in Windows Credential Manager" autocomplete="new-password">
+              <p class="rail-note">Gemini offers a limited free tier. Quotas can change; free-tier prompts may be used to improve Google products. Keep the key field blank to retain a saved key.</p>
+              <button class="remove-key-button" type="button" id="clearAiKey">Remove saved online key</button>
+              <label for="localUrl">Ollama URL</label>
+              <input id="localUrl" type="url" value="http://127.0.0.1:11434/v1" autocomplete="url">
+              <label for="localModelInput">Local model</label>
+              <input id="localModelInput" type="text" value="qwen2.5:7b" autocomplete="off">
+              <button class="save-payment" type="button" id="saveAiSettings">Save AI settings</button>
+              <small id="aiSaveStatus" role="status"></small>
+            </div>
+          </details>
+          <p class="rail-note">Local desktop actions remain available without Wi-Fi.</p>
+        </section>
+
+        <section class="rail-section">
+          <div class="section-title"><h2>Desktop tools</h2><span>READY</span></div>
+          <button class="tool-row" data-prompt="Check my system performance"><span class="tool-icon">⌁</span><span><strong>System status</strong><small>CPU, memory and disk</small></span><b>›</b></button>
+          <button class="tool-row" data-prompt="Clean junk"><span class="tool-icon">⌫</span><span><strong>Temporary files</strong><small>Preview before cleanup</small></span><b>›</b></button>
+          <button class="tool-row" data-prompt="Search the web for current information about"><span class="tool-icon">⌕</span><span><strong>Web search</strong><small>Open browser results</small></span><b>›</b></button>
+        </section>
+
+        <section class="rail-section quick-actions">
+          <div class="section-title"><h2>Quick actions</h2></div>
+          <button type="button" id="voiceButton"><span class="tool-icon">◖</span><span><strong>Voice assistant</strong><small id="voiceStatus">Checking microphone</small></span><span class="toggle" id="voiceToggle"></span></button>
+          <button type="button" data-action="help"><span class="tool-icon">?</span><span><strong>What can RAHU do?</strong><small>See supported actions</small></span><b>›</b></button>
+        </section>
+
+        <details class="advanced-tools">
+          <summary>Remote and payment tools</summary>
+          <div class="advanced-content">
+            <div class="remote-actions">
+              <button type="button" data-api="/api/connect">Request connection</button>
+              <button type="button" data-api="/api/approve">Approve connection</button>
+              <button type="button" data-api="/api/disconnect">Disconnect</button>
+            </div>
+            <label for="paymentSchedule">Payment schedule</label>
+            <input id="paymentSchedule" type="text" placeholder="daily / weekly / monthly">
+            <label for="paymentMethod">Payment method</label>
+            <select id="paymentMethod">
+              <option>Bank transfer</option>
+              <option>PayPal</option>
+              <option>UPI</option>
+              <option>Cash</option>
+            </select>
+            <button class="save-payment" type="button" id="savePayment">Save payment preferences</button>
+          </div>
+        </details>
+
+        <footer class="rail-footer"><img src="{{ url_for('static', filename='rahu.svg') }}" alt=""><span>Runs on this computer<br><small id="versionLabel">RAHU Assistant</small></span></footer>
+      </aside>
+    </main>
+  </div>
+  <script src="{{ url_for('static', filename='app.js') }}" defer></script>
+  {% endif %}
+</body>
+</html>
